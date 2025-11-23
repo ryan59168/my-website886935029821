@@ -341,15 +341,9 @@ iframe {
 
 <script>
 /* ==================================================
-   ★ 設定區：ID & API Key
+   ★ 設定區：SHEET_ID 
    ================================================== */
 const SHEET_ID = "16y8_QTo0QrQe5El9ylVvps94mhNi7zRuErIrxRkwoQc"; 
-
-// ★ 請在此處填入您的 API Key
-const GEMINI_API_KEY = "AIzaSyDckr865qsLflzmEEkGWlXbN03beT3OnbE"; 
-
-// ★ 模型名稱：這裡預設用 1.5-flash (目前最穩定的)，如果您測試 2.5 可行也可改
-const MODEL_NAME = "gemini-2.5-flash";
 
 // 初始化 Iframe
 const sheetFrame = document.getElementById("sheetFrame");
@@ -491,42 +485,43 @@ function speak(text) {
   window.speechSynthesis.speak(utterance);
 }
 
-/* ================= AI Gemini 功能 (使用您驗證過的邏輯) ================= */
+/* ================= AI Gemini 功能 ================= */
 async function askGemini(word) {
-    if(!GEMINI_API_KEY || GEMINI_API_KEY === "YOUR_GEMINI_API_KEY_HERE") {
-        alert("請先在程式碼中設定您的 Gemini API Key");
-        return;
-    }
-
+    // 1. 介面顯示：開啟 Modal 並顯示載入中
     aiModal.showModal();
     aiContent.textContent = "AI 老師正在思考中...";
     
+    // 2. 準備提示詞 (Prompt)
     const promptText = `請解釋英文單字 "${word}" 的中文意思，詞性，近似詞，返義詞，用法，並提供一個簡單的英文例句附帶中文翻譯。請用繁體中文回答。`;
 
-    // 使用您測試成功的 URL 結構
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${GEMINI_API_KEY}`;
-    
     try {
-        const response = await fetch(url, {
+        // ★ 3. 修改處：呼叫我們建立的 Vercel 後端，而非直接呼叫 Google
+        const response = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                contents: [{ parts: [{ text: promptText }] }]
+            body: JSON.stringify({ 
+                prompt: promptText // 將提示詞包裝在 prompt 欄位中傳給後端
             })
         });
 
         const data = await response.json();
         
-        if (data.error) {
+        // 4. 錯誤處理
+        if (!response.ok || data.error) {
              console.error("API Error:", data.error);
-             throw new Error(data.error.message);
+             // 讀取錯誤訊息，如果是物件就轉字串，否則直接顯示
+             const errMsg = typeof data.error === 'object' ? JSON.stringify(data.error) : data.error;
+             throw new Error(errMsg || "伺服器發生錯誤");
         }
 
+        // 5. 解析資料 (因為後端是原樣轉傳 Google 的回應，所以這裡解析邏輯不用變)
         if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
             throw new Error("AI 回傳內容為空");
         }
 
         let text = data.candidates[0].content.parts[0].text;
+        
+        // 6. 簡單的格式化 (轉 HTML)
         text = text.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>');
         aiContent.innerHTML = text;
 
@@ -638,3 +633,4 @@ textArea.addEventListener('input', () => {
 </script>
 </body>
 </html>
+
